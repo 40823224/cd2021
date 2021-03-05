@@ -92,15 +92,15 @@ g.es("admin pelican Github 執行完畢")
 <t tx="leo.20180423103639.1"></t>
 <t tx="leo.20180423103656.1">@language md
 ---
-Title: 2020 Fall CP 課程
-Date: 2020-08-13 11:00
+Title: 2021 Spring CD課程
+Date: 2021-02-26 14:00
 Category: Misc
-Tags: 2020FallCP
-Slug: 2020-Fall-Intro-to-computer-programming
+Tags: 2021SpringCD
+Slug: 2021-Spring-Intro-to-computer-programming
 Author: yen
 ---
 
-2020 Fall 計算機程式的教學主要介紹 Python 與 Flutter 在機械設計流程中的應用.
+2021 Spring 計算機程式的教學主要介紹 Python 與 Flutter 在機械設計流程中的應用.
 
 &lt;!-- PELICAN_END_SUMMARY --&gt;
 @others
