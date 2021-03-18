@@ -236,6 +236,7 @@ vertical: body pane on the botton</t>
     &lt;h2&gt;Slides&lt;/h2&gt;
     &lt;p&gt;
         Not a coder? Not a problem. There's a fully-featured visual editor for authoring these, try it out at &lt;a href="https://slides.com" target="_blank"&gt;https://slides.com&lt;/a&gt;.
+        
     &lt;/p&gt;
 &lt;/section&gt;
 
