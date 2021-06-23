@@ -122,7 +122,7 @@ img.add_border {
                             <li><a href="./../blog/index.html">blog</a></li>
                         </ul>
                       </li>
-                     <li><a href='About.html'>About</a><li class='has-children'><a href='stage1.html'>stage1</a><ul class='dropdown'><li><a href='W1.html'>W1</a><li><a href='W2.html'>W2</a><li><a href='W3.html'>W3</a><li><a href='W4.html'>W4</a><li><a href='W5.html'>W5</a></li></ul><li class='has-children'><a href='stage2.html'>stage2</a><ul class='dropdown'><li><a href='W6.html'>W6</a><li><a href='W7.html'>W7</a><li><a href='W8.html'>W8</a><li><a href='W9.html'>W9</a></li></ul><li class='has-children'><a href='stage3.html'>stage3</a><ul class='dropdown'><li><a href='W10.html'>W10</a><li><a href='W14.html'>W14</a><li><a href='W15.html'>W15</a><li class='has-children'><a href='W16.html'>W16</a><ul class='dropdown'><li><a href='Onshape零件.html'>Onshape零件</a><li><a href='CoppeliaSim場景.html'>CoppeliaSim場景</a><li><a href='suction pad 吸盤.html'>suction pad 吸盤</a><li><a href='逆向運動學函式.html'>逆向運動學函式</a><li><a href='remote API.html'>remote API</a></li></ul><li class='has-children'><a href='task 演練.html'>task 演練</a><ul class='dropdown'><li><a href='task1.html'>task1</a><li><a href='task2.html'>task2</a><li><a href='task3.html'>task3</a></li></li></ul></ul><li class='has-children'><a href='筆記.html'>筆記</a><ul class='dropdown'><li><a href='leo編輯.html'>leo編輯</a><li><a href='使用cms批次檔.html'>使用cms批次檔</a><li><a href='Gitlab.html'>Gitlab</a><li><a href='Fossil.html'>Fossil</a></li>
+                     <li><a href='About.html'>About</a><li class='has-children'><a href='stage1.html'>stage1</a><ul class='dropdown'><li><a href='W1.html'>W1</a><li><a href='W2.html'>W2</a><li><a href='W3.html'>W3</a><li><a href='W4.html'>W4</a><li><a href='W5.html'>W5</a></li></ul><li class='has-children'><a href='stage2.html'>stage2</a><ul class='dropdown'><li><a href='W6.html'>W6</a><li><a href='W7.html'>W7</a><li><a href='W8.html'>W8</a><li><a href='W9.html'>W9</a></li></ul><li class='has-children'><a href='stage3.html'>stage3</a><ul class='dropdown'><li><a href='W10.html'>W10</a><li class='has-children'><a href='task 演練.html'>task 演練</a><ul class='dropdown'><li><a href='task1.html'>task1</a><li><a href='task2.html'>task2</a><li><a href='task3.html'>task3</a></li></ul><li><a href='W14.html'>W14</a><li><a href='W15.html'>W15</a><li class='has-children'><a href='W16.html'>W16</a><ul class='dropdown'><li><a href='Onshape零件.html'>Onshape零件</a><li><a href='CoppeliaSim場景.html'>CoppeliaSim場景</a><li><a href='suction pad 吸盤.html'>suction pad 吸盤</a><li><a href='逆向運動學函式.html'>逆向運動學函式</a><li><a href='remote API.html'>remote API</a></li></ul><li><a href='W17.html'>W17</a><li><a href='W18.html'>W18</a></li></ul><li class='has-children'><a href='筆記.html'>筆記</a><ul class='dropdown'><li><a href='leo編輯.html'>leo編輯</a><li><a href='使用cms批次檔.html'>使用cms批次檔</a><li><a href='Gitlab.html'>Gitlab</a><li><a href='Fossil.html'>Fossil</a></li>
                       </ul>
                 </nav>
               </div>
@@ -133,10 +133,99 @@ img.add_border {
           </div>
           
         </header>
-    <div id="tipue_search_content">逆向運動學函式 << <a href='逆向運動學函式.html'>Previous</a> <a href='task 演練.html'>Next</a> >> task 演練<br /><h1>remote API</h1>
+    <div id="tipue_search_content">逆向運動學函式 << <a href='逆向運動學函式.html'>Previous</a> <a href='W17.html'>Next</a> >> W17<br /><h1>remote API</h1>
 <p></p>
 <p><iframe allow="autoplay" height="480" src="https://drive.google.com/file/d/1UHkr1eZKp_CYWCZhmi8SSzSyPo46RrTM/preview" width="640"></iframe></p>
-<br />逆向運動學函式 << <a href='逆向運動學函式.html'>Previous</a> <a href='task 演練.html'>Next</a> >> task 演練</div>
+<p>Python remote API.py內容:</p>
+<pre class="brush:html;auto-links:false;toolbar:false" contenteditable="false">import sim as vrep
+import math
+import random
+import time
+import math
+
+def moving(x,y):
+    a=0.467
+    b=0.401
+    c=math.pow(math.pow(x,2)+math.pow(y,2),0.5)
+    s=(a+b+c)*0.5
+    area=math.pow((s*(s-a)*(s-b)*(s-c)),0.5)
+    h=area/(2*c)
+    deg1_base=math.atan(x/y)
+    if x&lt;0 and y&lt;0 :
+        deg1_base=deg1_base+math.pi
+    deg1_tri=math.asin(h/a)
+    deg1=deg1_base+deg1_tri
+    deg2=math.pi-(0.5*math.pi-deg1_tri)-math.acos(h/b)
+    deg3=deg2-deg1
+    vrep.simxSetJointTargetPosition(clientID,joint01,deg1,opmode)
+    vrep.simxSetJointTargetPosition(clientID,joint02,(-deg2),opmode)
+    vrep.simxSetJointTargetPosition(clientID,joint03,deg3,opmode)
+
+def pick_and_place(x,y):
+    vrep.simxSetIntegerSignal(clientID,"pad_switch",0,opmode)
+    time.sleep(tt)
+    moving(0,0.868)
+    time.sleep(tt)
+    moving(x,y)
+    time.sleep(tt)
+    vrep.simxSetIntegerSignal(clientID,"pad_switch",1,opmode)
+    vrep.simxSetJointTargetPosition(clientID,jointz,-0.018,opmode)
+    time.sleep(tt)
+    vrep.simxSetJointTargetPosition(clientID,jointz,0,opmode)
+    time.sleep(tt)
+
+
+
+print ('Start')
+ 
+vrep.simxFinish(-1)
+ 
+clientID = vrep.simxStart('172.20.10.4', 19997, True, True, 5000, 5)
+  
+if clientID != -1:
+    print ('Connected to remote API server')
+      
+    res = vrep.simxAddStatusbarMessage(
+        clientID, "40823224",
+        vrep.simx_opmode_oneshot)
+    if res not in (vrep.simx_return_ok, vrep.simx_return_novalue_flag):
+        print("Could not add a message to the status bar.")
+  
+     
+    opmode = vrep.simx_opmode_oneshot_wait
+    STREAMING = vrep.simx_opmode_streaming
+  
+     
+    vrep.simxStartSimulation(clientID, opmode)
+    ret,joint01=vrep.simxGetObjectHandle(clientID,"joint1",opmode)
+    ret,joint02=vrep.simxGetObjectHandle(clientID,"joint2",opmode)
+    ret,joint03=vrep.simxGetObjectHandle(clientID,"joint3",opmode)
+    ret,jointz=vrep.simxGetObjectHandle(clientID,"jointZ",opmode)
+    tt=1.5
+ 
+
+    while True :
+        vrep.simxSetJointTargetPosition(clientID,joint01,0,opmode)
+        vrep.simxSetJointTargetPosition(clientID,joint02,0,opmode)
+        vrep.simxSetJointTargetPosition(clientID,joint03,0,opmode)
+        vrep.simxSetJointTargetPosition(clientID,jointz,-0.018,opmode)
+        vrep.simxSetIntegerSignal(clientID,"pad_switch",1,opmode)
+        time.sleep(tt)
+        vrep.simxSetJointTargetPosition(clientID,jointz,0,opmode)
+        time.sleep(tt)
+        while True:
+            x=0.2
+            y=0.7
+            moving(x,y)
+            time.sleep(tt)
+            pick_and_place(x,y)
+            x=-0.3
+            y=-0.55
+            moving(x,y)
+            time.sleep(tt)
+            pick_and_place(x,y)
+</pre>
+<p></p><br />逆向運動學函式 << <a href='逆向運動學函式.html'>Previous</a> <a href='W17.html'>Next</a> >> W17</div>
         
     <!-- footer -->
       <div class="container">
