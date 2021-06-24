@@ -247,7 +247,196 @@ for dname, dirs, files in os.walk("2021-03_2b_stage1"):
 <p>RoboDK 練習</p>
 <p><img alt="" height="317" src="/images/RoboDK.png" width="600"/></p>
 <p><iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="allowfullscreen" frameborder="0" height="315" src="https://www.youtube.com/embed/2Ai5_qFjC9A" title="YouTube video player" width="560"></iframe></p>
-<h2>W15</h2>
+<p>pick_and_place.py範例內容:</p>
+<pre class="brush:html;auto-links:false;toolbar:false" contenteditable="false"># KMOLab Portable RoboDK pick and place
+from robolink import *    # API to communicate with robodk
+from robodk import *      # robodk robotics toolbox
+
+# Setup global parameters
+BALL_DIAMETER = 100 # diameter of one ball
+APPROACH = 100      # approach distance to grab each part, in mm
+nTCPs = 6           # number of TCP's in the tool
+
+#----------------------------------------------
+# Function definitions
+
+def box_calc(BALLS_SIDE=4, BALLS_MAX=None):
+    """Calculate a list of points (ball center) as if the balls were stored in a box"""
+    if BALLS_MAX is None: BALLS_MAX = BALLS_SIDE**3
+    xyz_list = []
+    for h in range(BALLS_SIDE):
+        for i in range(BALLS_SIDE):
+            for j in range(BALLS_SIDE):
+                xyz_list = xyz_list + [[(i+0.5)*BALL_DIAMETER, (j+0.5)*BALL_DIAMETER, (h+0.5)*BALL_DIAMETER]]
+                if len(xyz_list) &gt;= BALLS_MAX:
+                    return xyz_list
+    return xyz_list
+
+def pyramid_calc(BALLS_SIDE=4):
+    """Calculate a list of points (ball center) as if the balls were place in a pyramid"""
+    #the number of balls can be calculated as: int(BALLS_SIDE*(BALLS_SIDE+1)*(2*BALLS_SIDE+1)/6)
+    BALL_DIAMETER = 100
+    xyz_list = []
+    sqrt2 = 2**(0.5)
+    for h in range(BALLS_SIDE):
+        for i in range(BALLS_SIDE-h):
+            for j in range(BALLS_SIDE-h):
+                height = h*BALL_DIAMETER/sqrt2 + BALL_DIAMETER/2
+                xyz_list = xyz_list + [[i*BALL_DIAMETER + (h+1)*BALL_DIAMETER*0.5, j*BALL_DIAMETER + (h+1)*BALL_DIAMETER*0.5, height]]
+    return xyz_list
+
+def balls_setup(frame, positions):
+    """Place a list of balls in a reference frame. The reference object (ball) must have been previously copied to the clipboard."""
+    nballs = len(positions)
+    step = 1.0/(nballs - 1)
+    for i in range(nballs):
+        newball = frame.Paste()
+        newball.setName('ball ' + str(i)) #set item name
+        newball.setPose(transl(positions[i])) #set item position with respect to parent
+        newball.setVisible(True, False) #make item visible but hide the reference frame
+        newball.Recolor([1-step*i, step*i, 0.2, 1]) #set RGBA color
+
+def cleanup_balls(parentnodes):
+    """Delete all child items whose name starts with \"ball\", from the provided list of parent items."""
+    todelete = []
+    for item in parentnodes:
+        todelete = todelete + item.Childs()
+
+    for item in todelete:
+        if item.Name().startswith('ball'):
+            item.Delete()
+
+def TCP_On(toolitem, tcp_id):
+    """Attach the closest object to the toolitem Htool pose,
+    furthermore, it will output appropriate function calls on the generated robot program (call to TCP_On)"""
+    toolitem.AttachClosest()
+    toolitem.RDK().RunMessage('Set air valve %i on' % (tcp_id+1))
+    toolitem.RDK().RunProgram('TCP_On(%i)' % (tcp_id+1));
+        
+def TCP_Off(toolitem, tcp_id, itemleave=0):
+    """Detaches the closest object attached to the toolitem Htool pose,
+    furthermore, it will output appropriate function calls on the generated robot program (call to TCP_Off)"""
+    toolitem.DetachAll(itemleave)
+    toolitem.RDK().RunMessage('Set air valve %i off' % (tcp_id+1))
+    toolitem.RDK().RunProgram('TCP_Off(%i)' % (tcp_id+1));
+
+
+#----------------------------------------------------------
+# The program starts here:
+
+# Any interaction with RoboDK must be done through RDK:
+RDK = Robolink()
+
+# Turn off automatic rendering (faster)
+RDK.Render(False)
+
+#RDK.Set_Simulation_Speed(500); # set the simulation speed
+
+# Gather required items from the station tree
+robot = RDK.Item('Fanuc M-710iC/50')
+robot_tools = robot.Childs()
+#robottool = RDK.Item('MainTool')
+frame1 = RDK.Item('Table 1')
+frame2 = RDK.Item('Table 2')
+
+# Copy a ball as an object (same as CTRL+C)
+ballref = RDK.Item('reference ball')
+ballref.Copy()
+
+# Run a pre-defined station program (in RoboDK) to replace the two tables
+prog_reset = RDK.Item('Replace objects')
+prog_reset.RunProgram()
+
+# Call custom procedure to remove old objects
+cleanup_balls([frame1, frame2])
+
+# Make a list of positions to place the objects
+frame1_list = pyramid_calc(4)
+frame2_list = pyramid_calc(4)
+
+# Programmatically place the objects with a custom-made procedure
+balls_setup(frame1, frame1_list)
+
+# Delete previously generated tools
+for tool in robot_tools:
+    if tool.Name().startswith('TCP'):
+        tool.Delete()
+        
+# Calculate tool frames for the suction cup tool of 6 suction cups
+TCP_list = []
+for i in range(nTCPs):
+    TCPi_pose = transl(0,0,100)*rotz((360/nTCPs)*i*pi/180)*transl(125,0,0)*roty(pi/2)
+    TCPi = robot.AddTool(TCPi_pose, 'TCP %i' % (i+1))
+    TCP_list.append(TCPi)
+
+TCP_0 = TCP_list[0]
+
+# Turn on automatic rendering
+RDK.Render(True)
+
+# Move balls    
+robot.setPoseTool(TCP_list[0])
+nballs_frame1 = len(frame1_list)
+nballs_frame2 = len(frame2_list)
+idTake = nballs_frame1 - 1
+idLeave = 0
+idTCP = 0
+target_app_frame = transl(2*BALL_DIAMETER, 2*BALL_DIAMETER, 4*BALL_DIAMETER)*roty(pi)*transl(0,0,-APPROACH)
+
+while idTake &gt;= 0:
+    # ------------------------------------------------------------------
+    # first priority: grab as many balls as possible
+    # the tool is empty at this point, so take as many balls as possible (up to a maximum of 6 -&gt; nTCPs)
+    ntake = min(nTCPs, idTake + 1)
+
+    # approach to frame 1
+    robot.setPoseFrame(frame1)
+    robot.setPoseTool(TCP_0)
+    robot.MoveJ([0,0,0,0,10,-200])
+    robot.MoveJ(target_app_frame)
+
+    # grab ntake balls from frame 1
+    for i in range(ntake):
+        TCPi = TCP_list[i]
+        robot.setPoseTool(TCPi)
+        # calculate target wrt frame1: rotation about Y is needed since Z and X axis are inverted
+        target = transl(frame1_list[idTake])*roty(pi)*rotx(30*pi/180)
+        target_app = target*transl(0,0,-APPROACH)
+        idTake = idTake - 1        
+        robot.MoveL(target_app)
+        robot.MoveL(target)
+        TCP_On(TCPi, i)
+        robot.MoveL(target_app)
+ 
+    # ------------------------------------------------------------------
+    # second priority: unload the tool     
+    # approach to frame 2 and place the tool balls into table 2
+    robot.setPoseTool(TCP_0)
+    robot.MoveJ(target_app_frame)
+    robot.MoveJ([0,0,0,0,10,-200])
+    robot.setPoseFrame(frame2)    
+    robot.MoveJ(target_app_frame)
+    for i in range(ntake):
+        TCPi = TCP_list[i]
+        robot.setPoseTool(TCPi)
+        if idLeave &gt; nballs_frame2-1:
+            raise Exception("No room left to place objects in Table 2")
+        
+        # calculate target wrt frame1: rotation of 180 about Y is needed since Z and X axis are inverted
+        target = transl(frame2_list[idLeave])*roty(pi)*rotx(30*pi/180)
+        target_app = target*transl(0,0,-APPROACH)
+        idLeave = idLeave + 1        
+        robot.MoveL(target_app)
+        robot.MoveL(target)
+        TCP_Off(TCPi, i, frame2)
+        robot.MoveL(target_app)
+
+    robot.MoveJ(target_app_frame)
+
+# Move home when the robot finishes
+robot.MoveJ([0,0,0,0,10,-200])
+</pre>
+<p></p><h2>W15</h2>
 <p><strong>MTB Robot 練習</strong></p>
 <table style="width: 251.75px;">
 <tbody>
@@ -295,14 +484,289 @@ for dname, dirs, files in os.walk("2021-03_2b_stage1"):
 <li>-- [[　 ]]-- 為多行註解</li>
 </ol>
 <p><iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="allowfullscreen" frameborder="0" height="315" src="https://www.youtube.com/embed/qAozBurBX3M" title="YouTube video player" width="560"></iframe></p>
+<p>mtbrobot_w15.lua範例內容:</p>
+<pre class="brush:html;auto-links:false;toolbar:false" contenteditable="false">function sysCall_init() 
+    axis1=sim.getObjectHandle('MTB_axis1')
+    axis2=sim.getObjectHandle('MTB_axis2')
+    axis3=sim.getObjectHandle('MTB_axis3')
+    axis4=sim.getObjectHandle('MTB_axis4')
+    mtb3=sim.getObjectHandle('MTB_link3Respondable')
+    suctionPad=sim.getObjectHandle('suctionPad')
+    BaseFrame=sim.getObjectHandle("BaseFrame")
+    block =sim.getObjectHandle("block")
+    rotation1 = 0
+    distance3 = 0
+    deg = math.pi/180
+end
+function sysCall_actuation() 
+    -- 吸盤往下降時, 直接貼在方塊頂部的校正值, 單位 m
+    -- 向下較正值為 4.2 mm
+    calibration = 0.0042
+    message, auxiliaryData=sim.getSimulatorMessage()
+        while message ~= -1 do
+            key=auxiliaryData[1]
+            sim.addStatusbarMessage('使用者按下 key:'..key)
+            if (message==sim.message_keypress) then
+                if (auxiliaryData[1]==112) then --p activate the suction pad
+                    -- if key p pressed activate the suction mode
+sim.setScriptSimulationParameter(sim.getScriptAssociatedWithObject(suctionPad),'active','true')
+                end -- if p
+                if (auxiliaryData[1]==113) then --q deactivate the suction pad
+                    -- if key q pressed deactivate the suction mode
+sim.setScriptSimulationParameter(sim.getScriptAssociatedWithObject(suctionPad),'active','false')
+                end -- if q
+                if (auxiliaryData[1]==114) then --r right turn in degree
+                    -- if key r pressed axis1 angle adds 5 degrees
+                     rotation1 = rotation1 + 5*deg
+                     sim.setJointPosition(axis1, rotation1)
+                end -- if r
+                if (auxiliaryData[1]==108) then --l left turn in degree
+                    -- if key l pressed axis1 angle substract 5 degrees
+                     rotation1 = rotation1 - 5*deg
+                     sim.setJointPosition(axis1, rotation1)
+                end -- if l
+                if (auxiliaryData[1]==100) then --d suction pad down
+                    -- if key d pressed axis3 will down 0.01 m plus calibration
+                     distance3 = distance3 + 0.01 + calibration
+                     sim.setJointPosition(axis3, distance3)
+                end -- if d
+                if (auxiliaryData[1]==117) then --u suction pad up
+                    -- if key u pressed axis3 will up 0.01 m minus calibration
+                    -- 吸盤往下升 1 公分加上校正值
+                     distance3 = distance3 - 0.01 - calibration
+                     sim.setJointPosition(axis3, distance3)
+                end -- if u
+                if (auxiliaryData[1]==99) then --c coordinate of block
+                    blockPosition = sim.getObjectPosition(block, BaseFrame)
+                    sim.addStatusbarMessage("方塊目前座標為:"..table_to_string(blockPosition))
+                end --if c
+           end  -- if
+    message, auxiliaryData=sim.getSimulatorMessage()
+        end -- while
+end -- function
+
+function sysCall_init()
+    joint1=sim.getObjectHandle('joint1')
+    joint2=sim.getObjectHandle('joint2')
+    joint3=sim.getObjectHandle('joint3')
+    jointz=sim.getObjectHandle('jointZ')
+    sim.setJointTargetPosition(joint1,0)
+    sim.setJointTargetPosition(joint2,0)
+    sim.setJointTargetPosition(joint3,0)
+    sim.setJointTargetPosition(jointz,0)
+    deg1=0
+    deg2=0
+    deg3=0
+end
+
+function sysCall_actuation()
+    message,auxiliaryData=sim.getSimulatorMessage()
+    while message~=-1 do
+        if (message==sim.message_keypress) then
+            if (auxiliaryData[1]==2009) then
+            deg1=deg1+1
+            deg3=deg2-deg1
+            sim.setJointTargetPosition(joint1,deg1*math.pi/180)
+            end
+            if (auxiliaryData[1]==2010) then
+            deg1=deg1-1
+            deg3=deg2-deg1
+            sim.setJointTargetPosition(joint1,deg1*math.pi/180)
+            end
+            if (auxiliaryData[1]==2007) then
+            deg2=deg2+1
+            deg3=deg1-deg2
+            sim.setJointTargetPosition(joint2,deg2*math.pi/180)
+            end
+            if (auxiliaryData[1]==2008) then
+            deg2=deg2-1
+            deg3=deg1-deg2
+            sim.setJointTargetPosition(joint2,deg2*math.pi/180)
+            end
+            if (auxiliaryData[1]==115) then
+                sim.setJointTargetPosition(jointz,-0.018)
+                sim.setIntegerSignal("pad_switch",1)
+            end
+            if(auxiliaryData[1]==119) then
+                sim.setJointTargetPosition(jointz,0)
+            end
+            if(auxiliaryData[1]==32) then
+                sim.setIntegerSignal("pad_switch",0)
+            end
+            sim.setJointTargetPosition(joint3,deg3*math.pi/180)
+        end
+    message,auxiliaryData=sim.getSimulatorMessage()
+    end
+end
+
+function sysCall_init()
+    joint1=sim.getObjectHandle('joint1')
+    joint2=sim.getObjectHandle('joint2')    
+    joint3=sim.getObjectHandle('joint3')
+    jointz=sim.getObjectHandle('jointZ')
+    sim.setJointTargetPosition(joint1,0)
+    sim.setJointTargetPosition(joint2,0)
+    sim.setJointTargetPosition(joint3,0)
+    sim.setJointTargetPosition(jointz,0)
+    deg1=0
+    deg2=0
+    deg3=0
+end
+
+function sysCall_actuation()
+    message,auxiliaryData=sim.getSimulatorMessage()
+    while message~=-1 do
+        if (message==sim.message_keypress) then
+            if (auxiliaryData[1]==100) then
+            deg1=deg1+1
+            deg3=deg2-deg1
+            sim.setJointTargetPosition(joint1,deg1*math.pi/180)
+            end
+            if (auxiliaryData[1]==97) then
+            deg1=deg1-1
+            deg3=deg2-deg1
+            sim.setJointTargetPosition(joint1,deg1*math.pi/180)
+            end
+            if (auxiliaryData[1]==119) then
+            deg2=deg2+1
+            deg3=deg1-deg2
+            sim.setJointTargetPosition(joint2,deg2*math.pi/180)
+            end
+            if (auxiliaryData[1]==115) then
+            deg2=deg2-1
+            deg3=deg1-deg2
+            sim.setJointTargetPosition(joint2,deg2*math.pi/180)
+            end
+            if (auxiliaryData[1]==2008) then
+                sim.setJointTargetPosition(jointz,-0.018)
+                sim.setIntegerSignal("pad_switch",1)
+            end
+            if(auxiliaryData[1]==2007) then
+                sim.setJointTargetPosition(jointz,0)
+            end
+            if(auxiliaryData[1]==32) then
+                sim.setIntegerSignal("pad_switch",0)
+            end
+            sim.setJointTargetPosition(joint3,deg3*math.pi/180)
+        end
+    message,auxiliaryData=sim.getSimulatorMessage()
+    end
+end
+
+function sysCall_sensing() 
+--[[
+    -- Read Proximity sensor (0= nothing detected, 1 = object detected)
+    local res = sim.readProximitySensor(proximity)
+
+    -- Check if possible to insert an new box
+    if (sim.getSimulationTime()-T_last_inserted &gt; T_insert) and not hasStopped then
+        insertBox()
+    end
+
+    -- If proximity sensor detects an object, stop the belt, stop inserting objects
+    if res == 1 and not hasStopped then
+        if boolList[1] then
+            sim.setScriptSimulationParameter(sim.handle_self,"conveyorBeltVelocity",0)
+            deltaTime = sim.getSimulationTime()-T_last_inserted
+            hasStopped = true
+        else
+            local box = table.remove(boxList,1)
+            local boxDummy = table.remove(boxDummyList,1)
+            table.remove(boolList,1)
+
+            sim.removeObject(box)
+            sim.removeObject(boxDummy)
+        end
+    end
+
+    -- If proximity sensor detects nothing and belt has stopped, start belt, continue inserting
+    if res == 0 and hasStopped then
+        sim.setScriptSimulationParameter(sim.handle_self,"conveyorBeltVelocity",beltSpeed)
+        hasStopped = false
+        T_last_inserted = sim.getSimulationTime()-deltaTime
+    end
+    
+]]--
+end
+function sysCall_cleanup() 
+end 
+-- Convert a lua table into a lua syntactically correct string
+function table_to_string(tbl)
+    local result = "{"
+    for k, v in pairs(tbl) do
+        -- Check the key type (ignore any numerical keys - assume its an array)
+        if type(k) == "string" then
+            result = result.."[\""..k.."\"]".."="
+        end
+
+        -- Check the value type
+        if type(v) == "table" then
+            result = result..table_to_string(v)
+        elseif type(v) == "boolean" then
+            result = result..tostring(v)
+        else
+            v = round(v, 4)
+            result = result.."\""..v.."\""
+        end
+        result = result..","
+    end
+    -- Remove leading commas from the result
+    if result ~= "" then
+        result = result:sub(1, result:len()-1)
+    end
+    return result.."}"
+end
+function round(x, n)
+    n = math.pow(10, n or 0)
+    x = x * n
+    if x &gt;= 0 then x = math.floor(x + 0.5) else x = math.ceil(x - 0.5) end
+    return x / n
+end
+
+
+function insertBox()
+    -- Generate random numbers
+    local rand1 = math.random()
+    local rand2 = math.random()
+    local rand3 = math.random()
+    -- Generate random disturbances on position and orientation
+    local dx = (2*rand1-1)*0.1
+    local dy = (2*rand2-1)*0.1
+    local dphi = (2*rand3-1)*0.5
+    local disturbedCoordinates = {0,0,0}
+    disturbedCoordinates[1] = insertCoordinate[1]+dx
+    disturbedCoordinates[2] = insertCoordinate[2]+dy
+    disturbedCoordinates[3] = insertCoordinate[3]
+    -- Copy and paste box and boxDummy
+    local insertedObjects = sim.copyPasteObjects({box,boxDummy},0)
+    -- Update last inserted box time
+    T_last_inserted = sim.getSimulationTime()
+    -- Move and rotate
+    sim.setObjectPosition(insertedObjects[1],-1,disturbedCoordinates)
+    sim.setObjectOrientation(insertedObjects[1],-1,{0,0,dphi})
+    -- Store handles to boxes and dummies
+    table.insert(boxList,insertedObjects[1])
+    table.insert(boxDummyList,insertedObjects[2]) 
+    -- Decide if object is good or bad
+    local decision = math.random() 
+    if decision &lt;= goodPercentage then
+    -- Object is good, assign goodColor
+        sim.setShapeColor(insertedObjects[1],nil,sim.colorcomponent_ambient_diffuse,goodColor)
+        table.insert(boolList,true)
+    else
+    -- Object is bad, assign random color
+        sim.setShapeColor(insertedObjects[1],nil,sim.colorcomponent_ambient_diffuse,{rand1,rand2,rand3})
+        table.insert(boolList,false)
+    end
+end
+</pre>
 <p></p>
 <p>影片翻譯：</p>
 <p>法1：YouTube介面 設定&gt;字幕&gt;自動翻譯&gt;中文(繁體)</p>
 <p>(翻譯較不精確)</p>
 <p><iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="allowfullscreen" frameborder="0" height="315" src="https://www.youtube.com/embed/IKOGwoJ2HLk" title="YouTube video player" width="560"></iframe></p>
 <p></p>
-<p><iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="allowfullscreen" frameborder="0" height="315" src="https://www.youtube.com/embed/eIZuz1XCd0w" title="YouTube video player" width="560"></iframe></p>
-<h2>W16</h2>
+<p><iframe allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen="allowfullscreen" frameborder="0" height="315" src="https://www.youtube.com/embed/eIZuz1XCd0w" title="YouTube video player" width="560"></iframe></p><h2>W16</h2>
 <p><strong>Onshape零件</strong></p>
 <p><a href="https://cad.onshape.com/documents/dd17fb8b3030943bcb40ae9e/w/709f20217e3655af3c9098a0/e/e9a44a69befef5156d104587">Onshape圖檔</a></p>
 <p>繪製圖檔過程:</p>
